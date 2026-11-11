@@ -4,7 +4,6 @@ name: DURGA JOB ALERTS - APPSC Scanner
 on:
   schedule:
     - cron: "30 0 * * *"
-
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,7 @@ permissions:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -31,7 +30,7 @@ jobs:
         run: node --use-system-ca appsc-filter.js
 
       - name: Save pending notifications
-        if: success()
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
