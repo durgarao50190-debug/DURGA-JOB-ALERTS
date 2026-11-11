@@ -2,14 +2,11 @@
 {
   "name": "durga-job-alerts",
   "version": "1.0.0",
-  "description": "DURGA JOB ALERTS - Government Job Notifications",
+  "description": "DURGA JOB ALERTS",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "Durga Rao",
-  "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "cheerio": "^1.2.0",

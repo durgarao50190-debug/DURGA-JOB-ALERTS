@@ -4,15 +4,36 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
-const PORT = 3000;
 
-app.use(express.json());
+// Render PORT or local PORT
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // Jobs data file
 const DATA_FILE = path.join(__dirname, "jobs.json");
 
-// Load saved jobs
+// Allowed job statuses
+const ALLOWED_STATUSES = [
+    "Applications Open",
+    "Upcoming",
+    "Closed - Exam Ongoing",
+    "Closed"
+];
+
+// Validate HTTPS URL
+function isValidHTTPS(url) {
+    try {
+        const parsedURL = new URL(url);
+        return parsedURL.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
+
+// Load jobs
 function loadJobs() {
     try {
         if (fs.existsSync(DATA_FILE)) {
@@ -23,10 +44,7 @@ function loadJobs() {
             return Array.isArray(data) ? data : [];
         }
     } catch (error) {
-        console.error(
-            "Jobs database loading error:",
-            error.message
-        );
+        console.error("Jobs loading error:", error.message);
     }
 
     return [];
@@ -34,7 +52,7 @@ function loadJobs() {
 
 let jobs = loadJobs();
 
-// Save jobs permanently
+// Save jobs
 function saveJobs() {
     fs.writeFileSync(
         DATA_FILE,
@@ -43,22 +61,11 @@ function saveJobs() {
     );
 }
 
-// Server status
-app.get("/api/status", (req, res) => {
-    res.json({
-        project: "DURGA JOB ALERTS",
-        status: "Backend running successfully"
-    });
-});
-
-// Get all verified jobs
-app.get("/api/jobs", (req, res) => {
-    res.json(jobs);
-});
-
-// Add a verified no-interview job
-app.post("/api/jobs", (req, res) => {
-    const job = req.body;
+// Validate job details
+function validateJob(job) {
+    if (!job || typeof job !== "object" || Array.isArray(job)) {
+        return "Invalid job details";
+    }
 
     if (
         !job.title ||
@@ -68,44 +75,79 @@ app.post("/api/jobs", (req, res) => {
         !Array.isArray(job.selectionProcess) ||
         job.selectionProcess.length === 0
     ) {
-        return res.status(400).json({
-            error: "Required details or selection process are missing"
-        });
+        return "Required details or selection process are missing";
     }
 
-    if (job.interview !== "No" || job.verified !== true) {
-        return res.status(400).json({
-            error: "Only officially verified no-interview jobs can be added"
-        });
+    if (
+        job.interview !== "No" ||
+        job.verified !== true
+    ) {
+        return "Only officially verified no-interview jobs can be added";
     }
 
-    // Validate official notification URL
-    try {
-        const notificationURL = new URL(job.notificationUrl);
-
-        if (notificationURL.protocol !== "https:") {
-            throw new Error("Invalid URL");
-        }
-    } catch (error) {
-        return res.status(400).json({
-            error: "Valid HTTPS notification URL is required"
-        });
+    if (!isValidHTTPS(job.notificationUrl)) {
+        return "Valid HTTPS notification URL is required";
     }
 
-    const allowedStatuses = [
-        "Applications Open",
-        "Upcoming",
-        "Closed - Exam Ongoing",
-        "Closed"
-    ];
+    if (
+        job.applyUrl &&
+        !isValidHTTPS(job.applyUrl)
+    ) {
+        return "Valid HTTPS application URL is required";
+    }
 
     if (
         job.status &&
-        !allowedStatuses.includes(job.status)
+        !ALLOWED_STATUSES.includes(job.status)
     ) {
-        return res.status(400).json({
-            error: "Invalid job status"
+        return "Invalid job status";
+    }
+
+    return null;
+}
+
+// Home page
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Backend status
+app.get("/api/status", (req, res) => {
+    res.json({
+        project: "DURGA JOB ALERTS",
+        status: "Backend running successfully",
+        totalJobs: jobs.length
+    });
+});
+
+// Get all jobs
+app.get("/api/jobs", (req, res) => {
+    res.json(jobs);
+});
+
+// Get single job
+app.get("/api/jobs/:id", (req, res) => {
+    const job = jobs.find(
+        item => item.id === Number(req.params.id)
+    );
+
+    if (!job) {
+        return res.status(404).json({
+            error: "Job not found"
         });
+    }
+
+    res.json(job);
+});
+
+// Add new verified job
+app.post("/api/jobs", (req, res) => {
+    const job = req.body;
+
+    const error = validateJob(job);
+
+    if (error) {
+        return res.status(400).json({ error });
     }
 
     const newJob = {
@@ -122,11 +164,9 @@ app.post("/api/jobs", (req, res) => {
         salary: job.salary || "",
         vacancies: job.vacancies || "",
 
-        // Application dates and status
         lastDate: job.lastDate || "",
         status: job.status || "Upcoming",
 
-        // Selection and examination details
         selectionProcess: job.selectionProcess,
         examDetails: job.examDetails || "",
 
@@ -148,6 +188,8 @@ app.post("/api/jobs", (req, res) => {
     } catch (error) {
         jobs.pop();
 
+        console.error("Save error:", error.message);
+
         return res.status(500).json({
             error: "Unable to save job details"
         });
@@ -159,7 +201,7 @@ app.post("/api/jobs", (req, res) => {
     });
 });
 
-// Update an existing job using its ID
+// Update job
 app.put("/api/jobs/:id", (req, res) => {
     const jobId = Number(req.params.id);
 
@@ -173,58 +215,22 @@ app.put("/api/jobs/:id", (req, res) => {
         });
     }
 
-    const updatedData = req.body;
     const oldJob = jobs[index];
-
-    const allowedStatuses = [
-        "Applications Open",
-        "Upcoming",
-        "Closed - Exam Ongoing",
-        "Closed"
-    ];
-
-    if (
-        updatedData.status &&
-        !allowedStatuses.includes(updatedData.status)
-    ) {
-        return res.status(400).json({
-            error: "Invalid job status"
-        });
-    }
 
     const updatedJob = {
         ...oldJob,
-        ...updatedData,
+        ...req.body,
+
+        // Keep original ID and verification status
         id: oldJob.id,
         interview: "No",
         verified: true
     };
 
-    // Validate notification URL if changed
-    try {
-        const notificationURL = new URL(
-            updatedJob.notificationUrl
-        );
+    const error = validateJob(updatedJob);
 
-        if (notificationURL.protocol !== "https:") {
-            throw new Error("Invalid URL");
-        }
-    } catch (error) {
-        return res.status(400).json({
-            error: "Valid HTTPS notification URL is required"
-        });
-    }
-
-    if (
-        !updatedJob.title ||
-        !updatedJob.department ||
-        !updatedJob.qualification ||
-        !Array.isArray(updatedJob.selectionProcess) ||
-        updatedJob.selectionProcess.length === 0
-    ) {
-        return res.status(400).json({
-            error: "Required job details are missing"
-        });
+    if (error) {
+        return res.status(400).json({ error });
     }
 
     jobs[index] = updatedJob;
@@ -233,6 +239,8 @@ app.put("/api/jobs/:id", (req, res) => {
         saveJobs();
     } catch (error) {
         jobs[index] = oldJob;
+
+        console.error("Update error:", error.message);
 
         return res.status(500).json({
             error: "Unable to update job details"
@@ -245,7 +253,7 @@ app.put("/api/jobs/:id", (req, res) => {
     });
 });
 
-// Delete a job using its ID
+// Delete job
 app.delete("/api/jobs/:id", (req, res) => {
     const jobId = Number(req.params.id);
 
@@ -266,6 +274,8 @@ app.delete("/api/jobs/:id", (req, res) => {
     } catch (error) {
         jobs.splice(index, 0, deletedJob);
 
+        console.error("Delete error:", error.message);
+
         return res.status(500).json({
             error: "Unable to delete job"
         });
@@ -276,9 +286,24 @@ app.delete("/api/jobs/:id", (req, res) => {
     });
 });
 
+// Invalid JSON handler
+app.use((error, req, res, next) => {
+    if (error instanceof SyntaxError && error.status === 400) {
+        return res.status(400).json({
+            error: "Invalid JSON request"
+        });
+    }
+
+    console.error(error);
+
+    res.status(500).json({
+        error: "Internal server error"
+    });
+});
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log(
-        `DURGA JOB ALERTS running at http://localhost:${PORT}`
+        `DURGA JOB ALERTS running on port ${PORT}`
     );
 });
