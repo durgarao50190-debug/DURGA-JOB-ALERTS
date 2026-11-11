@@ -1,0 +1,620 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#101c3a">
+<meta name="description" content="DURGA JOB ALERTS - Verified Government Job Notifications">
+<title>DURGA JOB ALERTS | Government Jobs</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f7fb;
+    color: #172033;
+}
+
+header {
+    background: #101c3a;
+    color: white;
+    padding: 22px 7%;
+}
+
+header h1 { font-size: 27px; }
+
+header p {
+    margin-top: 7px;
+    color: #cbd5e1;
+}
+
+nav {
+    background: #1e315d;
+    padding: 15px 7%;
+    display: flex;
+    gap: 25px;
+    flex-wrap: wrap;
+}
+
+nav a {
+    color: white;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+nav a:hover { color: #93c5fd; }
+
+.hero {
+    background: linear-gradient(120deg, #172b55, #2563eb);
+    color: white;
+    padding: 70px 7%;
+}
+
+.hero h2 {
+    font-size: 38px;
+    margin-bottom: 15px;
+}
+
+.hero p {
+    line-height: 1.8;
+    max-width: 680px;
+    color: #e2e8f0;
+}
+
+.tag {
+    display: inline-block;
+    margin-top: 22px;
+    padding: 10px 16px;
+    background: #ffffff20;
+    border: 1px solid #ffffff50;
+    border-radius: 30px;
+    font-size: 13px;
+}
+
+.container { padding: 42px 7%; }
+
+.container > h2 {
+    margin-bottom: 22px;
+    font-size: 25px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 18px;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 3px 14px #0000000c;
+    border: 1px solid #e5eaf2;
+    transition: 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+}
+
+.card h3 {
+    color: #1d4ed8;
+    margin-bottom: 10px;
+}
+
+.card p {
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.filters {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    box-shadow: 0 3px 14px #0000000c;
+}
+
+select, input {
+    padding: 13px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    min-width: 180px;
+    flex: 1;
+    font-size: 14px;
+    background: white;
+}
+
+button {
+    padding: 13px 22px;
+    border: none;
+    background: #2563eb;
+    color: white;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+button:hover { background: #1d4ed8; }
+
+#searchResult {
+    margin-top: 18px;
+    line-height: 1.7;
+}
+
+.notice {
+    background: #eff6ff;
+    border-left: 5px solid #2563eb;
+    padding: 22px;
+    border-radius: 8px;
+    line-height: 1.7;
+}
+
+.notice h2 { margin-bottom: 12px; }
+
+.job-card {
+    background: white;
+    padding: 25px;
+    margin-top: 18px;
+    border: 1px solid #e5eaf2;
+    border-radius: 12px;
+    line-height: 1.8;
+    box-shadow: 0 3px 14px #0000000c;
+    overflow-wrap: anywhere;
+}
+
+.job-card h3 {
+    color: #1d4ed8;
+    font-size: 21px;
+    margin-bottom: 12px;
+}
+
+.job-card h4 {
+    color: #1e315d;
+    margin-top: 17px;
+    margin-bottom: 6px;
+}
+
+.job-card hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 17px 0;
+}
+
+.job-card ol {
+    padding-left: 24px;
+}
+
+.job-card li { margin-bottom: 7px; }
+
+.job-card a {
+    display: inline-block;
+    margin: 10px 12px 0 0;
+    color: #1d4ed8;
+    font-weight: bold;
+}
+
+.status {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 20px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.empty {
+    background: white;
+    padding: 22px;
+    border-radius: 10px;
+    margin-top: 15px;
+    color: #64748b;
+    line-height: 1.7;
+}
+
+footer {
+    background: #101c3a;
+    color: white;
+    text-align: center;
+    padding: 25px;
+    margin-top: 30px;
+    line-height: 1.8;
+}
+
+@media(max-width: 600px) {
+    .hero h2 { font-size: 28px; }
+    .container { padding: 30px 5%; }
+    .filters { padding: 18px; }
+    select, input, button { width: 100%; }
+    nav { gap: 15px; }
+    .job-card { padding: 18px; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🇮🇳 DURGA JOB ALERTS</h1>
+    <p>Your Government Job Information Platform</p>
+</header>
+
+<nav>
+    <a href="#">Home</a>
+    <a href="#categories">Job Categories</a>
+    <a href="#filters">Find Jobs</a>
+    <a href="#jobResults">Job Results</a>
+    <a href="#rules">Selection Rules</a>
+</nav>
+
+<section class="hero">
+    <h2>Find Your Government Job</h2>
+    <p>
+        SSC, Banking, Railway, AP Government, Police and Defence
+        recruitment updates in one place. Find opportunities based
+        on your qualification and eligibility.
+    </p>
+    <div class="tag">
+        Official Notification Verified | No Interview Jobs
+    </div>
+</section>
+
+<section class="container" id="categories">
+    <h2>Explore Job Categories</h2>
+
+    <div class="grid">
+        <div class="card">
+            <h3>SSC Jobs</h3>
+            <p>CGL, CHSL, MTS, GD</p>
+        </div>
+
+        <div class="card">
+            <h3>Banking Jobs</h3>
+            <p>SBI, IBPS, RRB</p>
+        </div>
+
+        <div class="card">
+            <h3>Railway Jobs</h3>
+            <p>NTPC, Group D</p>
+        </div>
+
+        <div class="card">
+            <h3>AP Government</h3>
+            <p>APPSC and AP Government Jobs</p>
+        </div>
+
+        <div class="card">
+            <h3>Police Jobs</h3>
+            <p>AP Police and other Police recruitment</p>
+        </div>
+
+        <div class="card">
+            <h3>Defence Jobs</h3>
+            <p>Army, Navy and Air Force</p>
+        </div>
+
+        <div class="card">
+            <h3>Central Government</h3>
+            <p>Central Government recruitment</p>
+        </div>
+
+        <div class="card">
+            <h3>State Government</h3>
+            <p>All State Government recruitment</p>
+        </div>
+    </div>
+</section>
+
+<section class="container" id="filters">
+    <h2>Find Jobs By Qualification</h2>
+
+    <div class="filters">
+
+        <select id="qualification">
+            <option value="">All Qualifications</option>
+            <option value="10th Pass">10th Pass</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Degree">Degree</option>
+            <option value="PG">PG</option>
+        </select>
+
+        <select id="jobType">
+            <option value="">All Job Types</option>
+            <option value="Central Government">Central Government</option>
+            <option value="Andhra Pradesh Government">Andhra Pradesh Government</option>
+            <option value="Banking">Banking</option>
+            <option value="Railway">Railway</option>
+            <option value="Defence">Defence</option>
+        </select>
+
+        <input
+            type="text"
+            id="searchJob"
+            placeholder="Search job name"
+        >
+
+        <button onclick="searchJobs()">Search Jobs</button>
+        <button onclick="resetSearch()">Reset</button>
+    </div>
+
+    <p id="searchResult"></p>
+</section>
+
+<section class="container" id="jobResults">
+    <h2>Latest Government Job Notifications</h2>
+    <div id="jobsList">
+        <div class="empty">Loading verified jobs...</div>
+    </div>
+</section>
+
+<section class="container" id="rules">
+    <div class="notice">
+        <h2>Our No-Interview Rule</h2>
+
+        <p>
+            DURGA JOB ALERTS lists only recruitment notifications
+            that have been officially checked for NO personal interview,
+            HR interview or viva-voce at any selection stage.
+        </p>
+
+        <p>
+            Written exams, CBT, merit, physical tests, skill tests,
+            document verification and medical examinations can be
+            included when confirmed by the official notification.
+        </p>
+    </div>
+</section>
+
+<footer>
+    <p>© 2026 DURGA JOB ALERTS</p>
+    <p>Official Notification Based Job Information</p>
+</footer>
+
+<script>
+
+let allJobs = [];
+
+async function loadJobs() {
+    const jobsList = document.getElementById("jobsList");
+
+    try {
+        const response = await fetch("/api/jobs");
+
+        if (!response.ok) {
+            throw new Error("Job API not available");
+        }
+
+        const data = await response.json();
+
+        allJobs = Array.isArray(data) ? data : [];
+
+        // Show only verified no-interview jobs
+        allJobs = allJobs.filter(job =>
+            job.verified === true &&
+            job.interview === "No"
+        );
+
+        displayJobs(allJobs);
+
+    } catch (error) {
+        console.error(error);
+
+        jobsList.innerHTML = `
+            <div class="empty">
+                Unable to load job database.
+                Please check the backend server.
+            </div>
+        `;
+    }
+}
+
+function displayJobs(jobs) {
+    const jobsList = document.getElementById("jobsList");
+
+    if (!jobs.length) {
+        jobsList.innerHTML = `
+            <div class="empty">
+                No verified no-interview job notifications found.
+                Please check again later.
+            </div>
+        `;
+        return;
+    }
+
+    jobsList.innerHTML = jobs.map(job => {
+
+        const stages = Array.isArray(job.selectionProcess)
+            ? job.selectionProcess
+            : [];
+
+        const stageHTML = stages.length
+            ? `<ol>${stages.map(stage => {
+                if (typeof stage === "string") {
+                    return `<li>${escapeHTML(stage)}</li>`;
+                }
+
+                return `<li>${escapeHTML(
+                    stage.stage ||
+                    stage.name ||
+                    stage.title ||
+                    stage.description ||
+                    "Selection Stage"
+                )}</li>`;
+            }).join("")}</ol>`
+            : "<p>Not specified in notification.</p>";
+
+        const notificationLink = safeURL(job.notificationUrl);
+        const applyLink = safeURL(job.applyUrl);
+
+        const certificateIncluded = stages.some(stage => {
+            const value = typeof stage === "string"
+                ? stage
+                : JSON.stringify(stage);
+
+            return value.toLowerCase().includes("certificate") ||
+                   value.toLowerCase().includes("document verification");
+        });
+
+        return `
+        <div class="job-card">
+
+            <span class="status">Verified | No Interview</span>
+
+            <h3>${escapeHTML(job.title)}</h3>
+
+            <p><b>Department:</b> ${escapeHTML(job.department)}</p>
+            <p><b>Qualification:</b> ${escapeHTML(job.qualification)}</p>
+            <p><b>Job Type:</b> ${escapeHTML(job.jobType)}</p>
+            <p><b>Location:</b> ${escapeHTML(job.location)}</p>
+            <p><b>Age Limit:</b> ${escapeHTML(job.ageLimit)}</p>
+            <p><b>Salary:</b> ${escapeHTML(job.salary)}</p>
+            <p><b>Vacancies:</b> ${escapeHTML(job.vacancies)}</p>
+
+            <hr>
+
+            <h4>Selection Process / Exams to Write</h4>
+            ${stageHTML}
+
+            <h4>Exam Details</h4>
+            <p>${escapeHTML(job.examDetails || "Not specified in notification.")}</p>
+
+            <h4>Physical Test</h4>
+            <p>${escapeHTML(job.physicalTest || "Not specified in notification.")}</p>
+
+            <h4>Skill Test / CPT</h4>
+            <p>${escapeHTML(job.skillTest || "Not specified in notification.")}</p>
+
+            <h4>Medical Test</h4>
+            <p>${escapeHTML(job.medicalTest || "Not specified in notification.")}</p>
+
+            <h4>Interview / Viva-Voce</h4>
+            <p>${escapeHTML(job.interview)}</p>
+
+            <h4>Certificate Verification</h4>
+            <p>${certificateIncluded
+                ? "Included in selection process"
+                : "Check official notification"
+            }</p>
+
+            <hr>
+
+            <p><b>Official Verification:</b> ${
+                job.verified === true ? "Verified" : "Not Verified"
+            }</p>
+
+            ${notificationLink !== "#" ? `
+                <a href="${notificationLink}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                   Official Notification PDF
+                </a>
+            ` : ""}
+
+            ${applyLink !== "#" ? `
+                <a href="${applyLink}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                   Apply Online
+                </a>
+            ` : ""}
+
+        </div>
+        `;
+    }).join("");
+}
+
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+function safeURL(value) {
+    try {
+        const url = new URL(value);
+
+        if (url.protocol === "https:" || url.protocol === "http:") {
+            return escapeHTML(url.href);
+        }
+    } catch (error) {}
+
+    return "#";
+}
+
+function searchJobs() {
+    const qualification =
+        document.getElementById("qualification").value;
+
+    const jobType =
+        document.getElementById("jobType").value;
+
+    const search =
+        document.getElementById("searchJob").value
+        .trim()
+        .toLowerCase();
+
+    const filteredJobs = allJobs.filter(job => {
+
+        const jobQualifications = String(job.qualification || "")
+            .toLowerCase();
+
+        const matchesQualification =
+            !qualification ||
+            jobQualifications.includes(qualification.toLowerCase());
+
+        const matchesType =
+            !jobType ||
+            job.jobType === jobType;
+
+        const matchesSearch =
+            !search ||
+            String(job.title || "").toLowerCase().includes(search) ||
+            String(job.department || "").toLowerCase().includes(search);
+
+        return matchesQualification &&
+               matchesType &&
+               matchesSearch;
+    });
+
+    document.getElementById("searchResult").innerText =
+        filteredJobs.length +
+        " verified no-interview job(s) found.";
+
+    displayJobs(filteredJobs);
+
+    document.getElementById("jobResults")
+        .scrollIntoView({ behavior: "smooth" });
+}
+
+function resetSearch() {
+    document.getElementById("qualification").value = "";
+    document.getElementById("jobType").value = "";
+    document.getElementById("searchJob").value = "";
+    document.getElementById("searchResult").innerText = "";
+
+    displayJobs(allJobs);
+}
+
+loadJobs();
+
+</script>
+
+</body>
+</html>
