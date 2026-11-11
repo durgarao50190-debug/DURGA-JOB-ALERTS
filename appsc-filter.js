@@ -2,6 +2,7 @@
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 
 // APPSC official pages
 const PAGES = [
@@ -15,7 +16,7 @@ const PAGES = [
     }
 ];
 
-// Official APPSC domains allowed for PDF links
+// Official APPSC domains allowed
 const ALLOWED_HOSTS = [
     "portal-psc.ap.gov.in",
     "psc.ap.gov.in"
@@ -29,73 +30,128 @@ const YEARS = [2026, 2027, 2028];
 
 // Connection settings
 const MAX_RETRIES = 3;
-const TIMEOUT_MS = 25000;
+const TIMEOUT_MS = 30;
 
 // Wait helper
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Fetch one APPSC page with retry
-async function fetchAPPSCWebsite(page) {
+// Fetch APPSC page using secure Windows curl
+function fetchAPPSCWebsite(page) {
+    return new Promise((resolve, reject) => {
+
+        const args = [
+            "-fL",
+            "--silent",
+            "--show-error",
+            "--max-time", String(TIMEOUT_MS),
+            "-A", "Mozilla/5.0",
+            "-H", "Accept: text/html,application/xhtml+xml",
+            "--write-out",
+            "\nDURGA_META:%{http_code}|%{url_effective}",
+            page.url
+        ];
+
+        execFile(
+            "curl.exe",
+            args,
+            {
+                encoding: "utf8",
+                maxBuffer: 10 * 1024 * 1024,
+                windowsHide: true
+            },
+            (error, stdout, stderr) => {
+
+                if (error) {
+                    console.error("Curl error:", error.message);
+                    if (stderr) console.error("Details:", stderr);
+                    return reject(error);
+                }
+
+                const marker = "\nDURGA_META:";
+                const markerIndex = stdout.lastIndexOf(marker);
+
+                if (markerIndex === -1) {
+                    return reject(
+                        new Error("HTTP response metadata not found.")
+                    );
+                }
+
+                const html = stdout.substring(0, markerIndex);
+
+                const metadata = stdout
+                    .substring(markerIndex + marker.length)
+                    .trim();
+
+                const [status, finalURL] = metadata.split("|");
+
+                if (status !== "200") {
+                    return reject(
+                        new Error(`APPSC returned HTTP ${status}`)
+                    );
+                }
+
+                try {
+                    const parsedURL = new URL(finalURL);
+
+                    if (
+                        parsedURL.protocol !== "https:" ||
+                        !ALLOWED_HOSTS.includes(parsedURL.hostname)
+                    ) {
+                        return reject(
+                            new Error("Unexpected redirect destination.")
+                        );
+                    }
+
+                } catch (error) {
+                    return reject(
+                        new Error("Invalid final response URL.")
+                    );
+                }
+
+                if (!html.trim()) {
+                    return reject(
+                        new Error("APPSC returned an empty HTML page.")
+                    );
+                }
+
+                console.log("Secure connection successful.");
+                console.log("HTTP status:", status);
+                console.log(
+                    "HTML bytes:",
+                    Buffer.byteLength(html, "utf8")
+                );
+
+                resolve(html);
+            }
+        );
+    });
+}
+
+// Fetch with retry
+async function fetchWithRetry(page) {
     let lastError;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+
         try {
             console.log(
                 `Connecting to ${page.name}... Attempt ${attempt}/${MAX_RETRIES}`
             );
 
-            const response = await fetch(page.url, {
-                method: "GET",
-                redirect: "follow",
-                headers: {
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-                    "Accept":
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-IN,en;q=0.9",
-                    "Cache-Control": "no-cache"
-                },
-                signal: AbortSignal.timeout(TIMEOUT_MS)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            // Validate final redirect destination
-            const finalURL = new URL(response.url);
-
-            if (
-                finalURL.protocol !== "https:" ||
-                !ALLOWED_HOSTS.includes(finalURL.hostname)
-            ) {
-                throw new Error(
-                    `Unexpected redirect destination: ${response.url}`
-                );
-            }
-
-            const html = await response.text();
-
-            if (!html || html.trim().length === 0) {
-                throw new Error("APPSC returned an empty page.");
-            }
+            const html = await fetchAPPSCWebsite(page);
 
             return html;
 
         } catch (error) {
+
             lastError = error;
 
             console.error(
-                `Connection attempt ${attempt} failed:`,
+                `Attempt ${attempt} failed:`,
                 error.message
             );
-
-            if (error.cause) {
-                console.error("Cause:", error.cause.message || error.cause);
-                console.error("Error code:", error.cause.code || "Unknown");
-            }
 
             if (attempt < MAX_RETRIES) {
                 console.log("Retrying in 5 seconds...\n");
@@ -112,6 +168,7 @@ async function fetchAPPSCWebsite(page) {
 
 // Read existing pending jobs
 function loadPendingJobs() {
+
     if (!fs.existsSync(PENDING_FILE)) {
         return [];
     }
@@ -135,10 +192,12 @@ function loadPendingJobs() {
 
 // Extract official notification PDF links
 function extractNotifications(html, page) {
+
     const $ = cheerio.load(html);
     const results = new Map();
 
     $("a[href]").each((index, element) => {
+
         const title = $(element)
             .text()
             .replace(/\s+/g, " ")
@@ -149,6 +208,7 @@ function extractNotifications(html, page) {
         if (!href) return;
 
         try {
+
             const parsedURL = new URL(href, page.url);
 
             // Only HTTPS links
@@ -176,8 +236,7 @@ function extractNotifications(html, page) {
             const officialLink = parsedURL.href;
 
             results.set(officialLink, {
-                title:
-                    title || "APPSC Official Notification PDF",
+                title: title || "APPSC Official Notification PDF",
                 year,
                 officialLink,
                 sourcePage: page.name
@@ -193,6 +252,7 @@ function extractNotifications(html, page) {
 
 // Main scanner
 async function filterAPPSC() {
+
     console.log("\n====================================");
     console.log("         DURGA JOB ALERTS");
     console.log("         APPSC AUTO SCANNER");
@@ -201,9 +261,16 @@ async function filterAPPSC() {
     let pendingJobs = [];
 
     try {
+
         pendingJobs = loadPendingJobs();
+
     } catch (error) {
-        console.error("Unable to read pending-jobs.json:", error.message);
+
+        console.error(
+            "Unable to read pending-jobs.json:",
+            error.message
+        );
+
         process.exitCode = 1;
         return;
     }
@@ -222,13 +289,15 @@ async function filterAPPSC() {
 
     // Scan both APPSC pages
     for (const page of PAGES) {
+
         console.log("\n------------------------------------");
         console.log("Scanning:", page.name);
         console.log("URL:", page.url);
         console.log("------------------------------------\n");
 
         try {
-            const html = await fetchAPPSCWebsite(page);
+
+            const html = await fetchWithRetry(page);
 
             console.log("Website connected successfully.");
 
@@ -242,8 +311,9 @@ async function filterAPPSC() {
             );
 
             for (const notification of notifications) {
-                // Keep one record per PDF URL
+
                 if (!allResults.has(notification.officialLink)) {
+
                     allResults.set(
                         notification.officialLink,
                         notification
@@ -252,6 +322,7 @@ async function filterAPPSC() {
             }
 
         } catch (error) {
+
             failedPages++;
 
             console.error(
@@ -261,21 +332,27 @@ async function filterAPPSC() {
         }
     }
 
-    // Do not overwrite the file if both pages failed
+    // Do not overwrite if both pages failed
     if (successfulPages === 0) {
+
         console.error("\nBoth APPSC pages failed.");
-        console.error("Existing pending-jobs.json was not changed.");
+        console.error(
+            "Existing pending-jobs.json was not changed."
+        );
+
         process.exitCode = 1;
         return;
     }
 
     // Save newly discovered notifications
     for (const job of allResults.values()) {
+
         if (existingLinks.has(job.officialLink)) {
             continue;
         }
 
         const newJob = {
+
             id: `APPSC-${Date.now()}-${added + 1}`,
 
             title: job.title,
@@ -318,18 +395,25 @@ async function filterAPPSC() {
 
         console.log("\nNew notification discovered:");
         console.log("Title:", job.title);
-        console.log("PDF:", job.officialLink);
+        console.log("Official PDF:", job.officialLink);
     }
 
     // Save pending jobs
     try {
+
         fs.writeFileSync(
             PENDING_FILE,
             JSON.stringify(pendingJobs, null, 2) + "\n",
             "utf8"
         );
+
     } catch (error) {
-        console.error("Unable to save pending-jobs.json:", error.message);
+
+        console.error(
+            "Unable to save pending-jobs.json:",
+            error.message
+        );
+
         process.exitCode = 1;
         return;
     }
@@ -338,6 +422,7 @@ async function filterAPPSC() {
     console.log("\n========== SCAN RESULTS ==========\n");
 
     for (const year of YEARS) {
+
         const yearJobs = [...allResults.values()].filter(
             job => job.year === year
         );
@@ -346,6 +431,7 @@ async function filterAPPSC() {
         console.log("PDF notifications found:", yearJobs.length);
 
         yearJobs.forEach((job, index) => {
+
             console.log(`${index + 1}. ${job.title}`);
             console.log("Official PDF:", job.officialLink);
         });
@@ -355,11 +441,13 @@ async function filterAPPSC() {
 
     // Final summary
     console.log("========== SUMMARY ==========");
+
     console.log("Pages scanned successfully:", successfulPages);
     console.log("Pages failed:", failedPages);
     console.log("PDF notifications discovered:", allResults.size);
     console.log("New notifications added:", added);
     console.log("Total pending notifications:", pendingJobs.length);
+
     console.log("Saved file: pending-jobs.json");
 
     console.log("\nIMPORTANT:");
@@ -369,12 +457,23 @@ async function filterAPPSC() {
     console.log("Only verified eligible jobs should be published.");
 
     console.log("\nAPPSC scanning completed.");
+
+    // A partial scan should not be reported as fully successful
+    if (failedPages > 0) {
+        console.error(
+            "\nWARNING: Some APPSC pages could not be scanned."
+        );
+        process.exitCode = 1;
+    }
 }
 
 // Run directly or import into another file
 if (require.main === module) {
+
     filterAPPSC().catch(error => {
+
         console.error("\nAPPSC SCANNER FAILED:", error);
+
         process.exitCode = 1;
     });
 }
