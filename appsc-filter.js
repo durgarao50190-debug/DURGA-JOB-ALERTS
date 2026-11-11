@@ -13,7 +13,80 @@ const PENDING_FILE = path.join(__dirname, "pending-jobs.json");
 // Monitoring years
 const YEARS = [2026, 2027, 2028];
 
-// Scanner
+// Connection settings
+const MAX_RETRIES = 3;
+const TIMEOUT_MS = 20000;
+
+// Wait helper
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Connect to APPSC with retry
+async function fetchAPPSCWebsite() {
+    let lastError;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(
+                `Connecting to APPSC... Attempt ${attempt}/${MAX_RETRIES}`
+            );
+
+            const response = await fetch(WEBSITE_URL, {
+                method: "GET",
+                redirect: "follow",
+                headers: {
+                    "User-Agent":
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+                    "Accept":
+                        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Cache-Control": "no-cache"
+                },
+                signal: AbortSignal.timeout(TIMEOUT_MS)
+            });
+
+            if (!response.ok) {
+                throw new Error(
+                    `APPSC website returned HTTP ${response.status}`
+                );
+            }
+
+            const html = await response.text();
+
+            if (!html || html.trim().length === 0) {
+                throw new Error("APPSC website returned an empty page.");
+            }
+
+            return html;
+
+        } catch (error) {
+            lastError = error;
+
+            console.error(
+                `Connection attempt ${attempt} failed:`,
+                error.message
+            );
+
+            if (error.cause) {
+                console.error("Cause:", error.cause);
+                console.error("Error code:", error.cause.code);
+            }
+
+            if (attempt < MAX_RETRIES) {
+                console.log("Retrying in 5 seconds...\n");
+                await wait(5000);
+            }
+        }
+    }
+
+    throw new Error(
+        `Unable to connect to APPSC after ${MAX_RETRIES} attempts. ` +
+        `Last error: ${lastError?.message || "Unknown error"}`
+    );
+}
+
+// Main scanner
 async function filterAPPSC() {
     console.log("\n================================");
     console.log("       DURGA JOB ALERTS");
@@ -34,31 +107,19 @@ async function filterAPPSC() {
 
             if (!Array.isArray(pendingJobs)) {
                 throw new Error(
-                    "pending-jobs.json must contain an array"
+                    "pending-jobs.json must contain a JSON array."
                 );
             }
         }
 
-        // Download APPSC page
-        console.log("Connecting to APPSC official website...");
+        // Connect to APPSC
+        console.log("APPSC official website connection starting...\n");
 
-        const response = await fetch(WEBSITE_URL, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 DURGA-JOB-ALERTS"
-            },
-            signal: AbortSignal.timeout(20000)
-        });
+        const html = await fetchAPPSCWebsite();
 
-        if (!response.ok) {
-            throw new Error(
-                "APPSC website error: HTTP " + response.status
-            );
-        }
-
-        const html = await response.text();
         const $ = cheerio.load(html);
 
-        console.log("APPSC website connected successfully.\n");
+        console.log("\nAPPSC website connected successfully.\n");
 
         // Existing links for duplicate checking
         const existingLinks = new Set(
@@ -78,9 +139,9 @@ async function filterAPPSC() {
 
             if (!title || !href) return;
 
-            const combined = title + " " + href;
+            const combined = `${title} ${href}`;
 
-            // Check year
+            // Check monitoring year
             const yearMatch = combined.match(
                 /\b(2026|2027|2028)\b/
             );
@@ -91,28 +152,28 @@ async function filterAPPSC() {
 
             if (!YEARS.includes(year)) return;
 
-            // Check notification keyword
+            // Check notification keywords
             if (!/notification|recruitment/i.test(combined)) {
                 return;
             }
 
-            // Convert relative URL into absolute URL
+            // Convert relative URL to absolute URL
             let officialLink;
 
             try {
-                officialLink = new URL(
-                    href,
-                    WEBSITE_URL
-                ).href;
+                const parsedUrl = new URL(href, WEBSITE_URL);
+
+                if (parsedUrl.protocol !== "https:") {
+                    return;
+                }
+
+                officialLink = parsedUrl.href;
+
             } catch {
                 return;
             }
 
-            // Allow only HTTPS links
-            if (!officialLink.startsWith("https://")) {
-                return;
-            }
-
+            // Avoid duplicate results in current scan
             results.set(officialLink, {
                 year,
                 title,
@@ -124,13 +185,12 @@ async function filterAPPSC() {
         let added = 0;
 
         for (const job of results.values()) {
-
             if (existingLinks.has(job.officialLink)) {
                 continue;
             }
 
             pendingJobs.push({
-                id: Date.now() + added,
+                id: `${Date.now()}-${added}`,
 
                 title: job.title,
 
@@ -174,45 +234,54 @@ async function filterAPPSC() {
         );
 
         // Display year-wise results
-        console.log("========== SCAN RESULTS ==========\n");
+        console.log("\n========== SCAN RESULTS ==========\n");
 
         for (const year of YEARS) {
-
             const yearJobs = [...results.values()].filter(
                 job => job.year === year
             );
 
             console.log("YEAR:", year);
-            console.log("Notifications found:", yearJobs.length);
+            console.log(
+                "Notifications found:",
+                yearJobs.length
+            );
 
             yearJobs.forEach((job, index) => {
-                console.log(
-                    `${index + 1}. ${job.title}`
-                );
-
-                console.log(
-                    "Official link:",
-                    job.officialLink
-                );
+                console.log(`${index + 1}. ${job.title}`);
+                console.log("Official link:", job.officialLink);
             });
 
             console.log("");
         }
 
+        // Final summary
         console.log("========== SUMMARY ==========");
         console.log("New notifications added:", added);
-        console.log("Total pending notifications:", pendingJobs.length);
+        console.log(
+            "Total pending notifications:",
+            pendingJobs.length
+        );
         console.log("Saved file: pending-jobs.json");
 
         console.log("\nIMPORTANT:");
-        console.log("These notifications are NOT verified jobs.");
-        console.log("Check official notification PDF before publishing.");
-        console.log("\nAPPSC scanning completed.");
+        console.log(
+            "Notifications are NOT verified jobs."
+        );
+        console.log(
+            "Check the official notification PDF before publishing."
+        );
+
+        console.log("\nAPPSC scanning completed successfully.");
 
     } catch (error) {
-
-        console.error("\nAPPSC SCANNER FAILED:");
-        console.error(error.message);
+        console.error("\n========== APPSC SCANNER FAILED ==========");
+        console.error("Message:", error.message);
+        console.error("Cause:", error.cause || "Not available");
+        console.error(
+            "Error code:",
+            error.cause?.code || error.code || "Not available"
+        );
 
         process.exitCode = 1;
     }
