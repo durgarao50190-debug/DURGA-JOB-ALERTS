@@ -1,0 +1,42 @@
+
+name: DURGA JOB ALERTS - APPSC Scanner
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run APPSC scanner
+        run: node appsc-filter.js
+
+      - name: Save pending notifications
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pending-jobs.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update APPSC pending notifications"
+            git push
+          else
+            echo "No new notifications to save."
+          fi
