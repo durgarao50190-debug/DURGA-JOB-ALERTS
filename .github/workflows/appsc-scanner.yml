@@ -27,30 +27,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check APPSC website connection
-        run: |
-          node --use-system-ca -e "
-          fetch('https://portal-psc.ap.gov.in/HomePages/RecruitmentNotifications', {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 DURGA-JOB-ALERTS'
-            },
-            signal: AbortSignal.timeout(30000)
-          })
-          .then(response => {
-            console.log('APPSC HTTP Status:', response.status);
-            if (!response.ok) process.exitCode = 1;
-          })
-          .catch(error => {
-            console.error('APPSC connection failed:', error);
-            console.error('Cause:', error.cause);
-            process.exitCode = 1;
-          });
-          "
-
       - name: Run APPSC scanner
         run: node --use-system-ca appsc-filter.js
 
       - name: Save pending notifications
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
