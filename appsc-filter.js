@@ -24,7 +24,7 @@ const ALLOWED_HOSTS = [
 
 const PENDING_FILE = path.join(__dirname, "pending-jobs.json");
 
-// Automatically monitor current Indian year + next 2 years
+// Current Indian year + next 2 years
 const CURRENT_YEAR = Number(
     new Intl.DateTimeFormat("en-IN", {
         timeZone: "Asia/Kolkata",
@@ -45,16 +45,20 @@ function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Secure HTTPS request using Windows curl
+// Secure HTTPS request using Windows curl.
+// Certificate verification remains enabled.
 function fetchAPPSCWebsite(page) {
     return new Promise((resolve, reject) => {
         const args = [
             "-fL",
             "--silent",
             "--show-error",
-            "--max-time", String(TIMEOUT_SECONDS),
-            "-A", "Mozilla/5.0",
-            "-H", "Accept: text/html,application/xhtml+xml",
+            "--max-time",
+            String(TIMEOUT_SECONDS),
+            "-A",
+            "Mozilla/5.0",
+            "-H",
+            "Accept: text/html,application/xhtml+xml",
             "--write-out",
             "\nDURGA_META:%{http_code}|%{url_effective}",
             page.url
@@ -187,7 +191,7 @@ function loadPendingJobs() {
 
 // Extract notification number, e.g. 37/2026
 function getNotificationNumber(text) {
-    const match = text.match(
+    const match = String(text || "").match(
         /notification\s*(?:no\.?|number)\s*[:.-]?\s*(\d{1,3})\s*\/\s*(20\d{2})/i
     );
 
@@ -198,7 +202,7 @@ function getNotificationNumber(text) {
 
 // Extract date in DD/MM/YYYY format
 function getNotificationDate(text) {
-    const match = text.match(
+    const match = String(text || "").match(
         /\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/
     );
 
@@ -221,19 +225,22 @@ function getNotificationDate(text) {
     return date.toISOString().slice(0, 10);
 }
 
-// Convert notification date to comparable number
+// Convert date to comparable number
 function dateValue(date) {
     if (!date) return 0;
 
     const value = Date.parse(`${date}T00:00:00Z`);
+
     return Number.isNaN(value) ? 0 : value;
 }
 
 // Build unique key for a notification
 function getJobKey(job) {
-    const number = getNotificationNumber(
-        `${job.title || ""} ${job.notificationUrl || ""}`
-    );
+    const number =
+        job.notificationNumber ||
+        getNotificationNumber(
+            `${job.title || ""} ${job.notificationUrl || ""}`
+        );
 
     if (number) {
         return `APPSC-${number}`;
@@ -246,7 +253,7 @@ function getJobKey(job) {
 function addRevision(history, item, primaryURL) {
     const existing = Array.isArray(history) ? history : [];
 
-    if (!item.url || item.url === primaryURL) {
+    if (!item || !item.url || item.url === primaryURL) {
         return existing;
     }
 
@@ -264,6 +271,81 @@ function addRevision(history, item, primaryURL) {
     });
 
     return existing;
+}
+
+// Merge old and new versions of the same notification
+function mergeNotification(existing, incoming) {
+    const oldHistory = Array.isArray(existing.revisionHistory)
+        ? existing.revisionHistory
+        : [];
+
+    const newHistory = Array.isArray(incoming.alternateLinks)
+        ? incoming.alternateLinks
+        : Array.isArray(incoming.revisionHistory)
+            ? incoming.revisionHistory
+            : [];
+
+    const incomingURL =
+        incoming.notificationUrl || incoming.officialLink || "";
+
+    let result = { ...existing };
+
+    const oldDate = dateValue(existing.notificationDate);
+    const newDate = dateValue(incoming.notificationDate);
+
+    if (
+        incomingURL &&
+        incomingURL !== existing.notificationUrl &&
+        newDate > oldDate
+    ) {
+        const previousPrimary = {
+            url: existing.notificationUrl,
+            title: existing.title,
+            notificationDate: existing.notificationDate || null,
+            sourcePage: existing.sourcePage || "APPSC"
+        };
+
+        result = {
+            ...result,
+            title: incoming.title || existing.title,
+            notificationUrl: incomingURL,
+            notificationDate: incoming.notificationDate,
+            sourcePage: incoming.sourcePage || existing.sourcePage,
+            year: incoming.year || existing.year
+        };
+
+        result.revisionHistory = addRevision(
+            oldHistory,
+            previousPrimary,
+            result.notificationUrl
+        );
+    } else {
+        result.revisionHistory = oldHistory;
+
+        // Preserve incoming PDF if it is not the primary PDF
+        if (incomingURL && incomingURL !== existing.notificationUrl) {
+            result.revisionHistory = addRevision(
+                result.revisionHistory,
+                {
+                    url: incomingURL,
+                    title: incoming.title,
+                    notificationDate: incoming.notificationDate,
+                    sourcePage: incoming.sourcePage
+                },
+                result.notificationUrl
+            );
+        }
+    }
+
+    for (const revision of newHistory) {
+        result.revisionHistory = addRevision(
+            result.revisionHistory,
+            revision,
+            result.notificationUrl
+        );
+    }
+
+    return result;
 }
 
 // Extract official PDF links from APPSC HTML
@@ -294,23 +376,21 @@ function extractNotifications(html, page) {
             const parsedURL = new URL(href, page.url);
 
             if (parsedURL.protocol !== "https:") return;
-
             if (!ALLOWED_HOSTS.includes(parsedURL.hostname)) return;
-
             if (!/\.pdf(?:$|[?#])/i.test(parsedURL.href)) return;
 
-            // Prefer notification number's year
-            const notificationNumber =
-                getNotificationNumber(contextText + " " + parsedURL.href);
+            const notificationNumber = getNotificationNumber(
+                `${contextText} ${parsedURL.href}`
+            );
 
             let year;
 
             if (notificationNumber) {
                 year = Number(notificationNumber.split("/")[1]);
             } else {
-                const yearMatch = contextText.match(
-                    /\b(20\d{2})\b/
-                ) || parsedURL.href.match(/\b(20\d{2})\b/);
+                const yearMatch =
+                    contextText.match(/\b(20\d{2})\b/) ||
+                    parsedURL.href.match(/\b(20\d{2})\b/);
 
                 if (!yearMatch) return;
 
@@ -323,7 +403,7 @@ function extractNotifications(html, page) {
             const notificationDate = getNotificationDate(contextText);
 
             const item = {
-                title: title || "APPSC Official Notification PDF",
+                title: title || rowText || "APPSC Official Notification PDF",
                 year,
                 notificationNumber,
                 notificationDate,
@@ -340,7 +420,6 @@ function extractNotifications(html, page) {
             } else {
                 const previous = results.get(key);
 
-                // Prefer the notification with the newer date
                 if (
                     dateValue(item.notificationDate) >
                     dateValue(previous.notificationDate)
@@ -376,65 +455,6 @@ function extractNotifications(html, page) {
     return [...results.values()];
 }
 
-// Merge old and new versions of the same notification
-function mergeNotification(existing, incoming) {
-    const oldHistory = Array.isArray(existing.revisionHistory)
-        ? existing.revisionHistory
-        : [];
-
-    const newHistory = Array.isArray(incoming.alternateLinks)
-        ? incoming.alternateLinks
-        : [];
-
-    let result = { ...existing };
-
-    const oldDate = dateValue(existing.notificationDate);
-    const newDate = dateValue(incoming.notificationDate);
-
-    // Update primary PDF only when the incoming notification date is newer
-    if (
-        incoming.officialLink &&
-        incoming.officialLink !== existing.notificationUrl &&
-        newDate > oldDate
-    ) {
-        const previousPrimary = {
-            url: existing.notificationUrl,
-            title: existing.title,
-            notificationDate: existing.notificationDate || null,
-            sourcePage: existing.sourcePage || "APPSC"
-        };
-
-        result = {
-            ...result,
-            title: incoming.title,
-            notificationUrl: incoming.officialLink,
-            notificationDate: incoming.notificationDate,
-            sourcePage: incoming.sourcePage,
-            year: incoming.year
-        };
-
-        result.revisionHistory = addRevision(
-            oldHistory,
-            previousPrimary,
-            result.notificationUrl
-        );
-    } else {
-        result.revisionHistory = oldHistory;
-    }
-
-    // Preserve all other discovered PDF links as history
-    for (const revision of newHistory) {
-        result.revisionHistory = addRevision(
-            result.revisionHistory,
-            revision,
-            result.notificationUrl
-        );
-    }
-
-    // Keep the existing ID and verification fields unchanged
-    return result;
-}
-
 // Consolidate existing duplicate records safely
 function consolidateExistingJobs(jobs) {
     const grouped = new Map();
@@ -462,19 +482,19 @@ function consolidateExistingJobs(jobs) {
                 getNotificationDate(job.title || ""),
             sourcePage: job.sourcePage,
             year: job.year,
-            alternateLinks: job.revisionHistory || []
+            revisionHistory: job.revisionHistory || []
         };
 
         const merged = mergeNotification(existing, incoming);
 
-        // Keep existing record's ID and verification fields
         grouped.set(key, {
             ...job,
             ...merged,
             id: existing.id || job.id,
             verificationStatus:
                 existing.verificationStatus || job.verificationStatus,
-            interview: existing.interview || job.interview,
+            interview:
+                existing.interview || job.interview,
             verified:
                 existing.verified === true || job.verified === true
         });
