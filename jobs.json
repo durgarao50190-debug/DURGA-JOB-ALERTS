@@ -1,1 +1,31 @@
-[]
+
+[
+  {
+    "id": 37102026,
+    "title": "APPSC Group-II Services Recruitment 2026 - Notification No.37/2026",
+    "department": "Andhra Pradesh Public Service Commission",
+    "qualification": "Degree (Post-wise subject-specific qualifications apply. Refer to the official notification.)",
+    "jobType": "Andhra Pradesh Government",
+    "location": "Andhra Pradesh",
+    "ageLimit": "Generally 18-44 years; age limit varies by post code.",
+    "salary": "INR 25,220 - INR 1,30,580 (varies by post)",
+    "vacancies": "720 (471 Executive + 249 Non-Executive)",
+    "lastDate": "11/12/2026",
+    "status": "Applications Open",
+    "selectionProcess": [
+      "Screening Test - Objective type, one GSMA paper, offline OMR mode. Scheduled for 21 February 2027.",
+      "Main Examination - Objective type, Computer Based Recruitment Test (CBRT) mode. Examination date will be announced by APPSC.",
+      "Computer Proficiency Test (CPT) - Qualifying examination.",
+      "Certificate Verification - Document verification and mandatory final post and zonal/district preferences.",
+      "Medical Fitness - Selected candidates must satisfy the prescribed medical fitness requirements before appointment."
+    ],
+    "examDetails": "Screening Test is conducted for shortlisting candidates to the Main Examination. Approximately 50 times the available vacancies will be shortlisted. Final selection is based on merit in the Main Examination, subject to qualifying the CPT. Negative marking of 1/3 mark applies for each wrong answer. Minimum aggregate qualifying marks: OC/EWS 40%, BC 35%, SC/ST/PBD 30%.",
+    "physicalTest": "No separate physical test specified as a common selection stage for all Group-II posts. Check individual post requirements.",
+    "skillTest": "Computer Proficiency Test (CPT) - qualifying stage.",
+    "medicalTest": "Required. Appointment is subject to prescribed medical fitness.",
+    "interview": "No",
+    "verified": true,
+    "notificationUrl": "https://psc.ap.gov.in/Documents/NotificationDocuments/Group_II_Detailed_Notification_37_2026.pdf",
+    "applyUrl": "https://psc.ap.gov.in/"
+  }
+]
