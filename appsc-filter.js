@@ -4,7 +4,10 @@ const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 
-// APPSC official pages
+// ========================================
+// APPSC OFFICIAL PAGES
+// ========================================
+
 const PAGES = [
     {
         name: "APPSC Notifications",
@@ -41,12 +44,20 @@ const YEARS = [
 const MAX_RETRIES = 3;
 const TIMEOUT_SECONDS = 30;
 
+// ========================================
+// WAIT FUNCTION
+// ========================================
+
 function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Secure HTTPS request using Windows curl.
-// Certificate verification remains enabled.
+// ========================================
+// SECURE APPSC WEBSITE FETCH
+// ========================================
+
+// Uses Windows curl.exe.
+// SSL certificate verification remains enabled.
 function fetchAPPSCWebsite(page) {
     return new Promise((resolve, reject) => {
         const args = [
@@ -75,7 +86,11 @@ function fetchAPPSCWebsite(page) {
             (error, stdout, stderr) => {
                 if (error) {
                     console.error("Curl error:", error.message);
-                    if (stderr) console.error("Details:", stderr);
+
+                    if (stderr) {
+                        console.error("Details:", stderr);
+                    }
+
                     return reject(error);
                 }
 
@@ -89,6 +104,7 @@ function fetchAPPSCWebsite(page) {
                 }
 
                 const html = stdout.substring(0, markerIndex);
+
                 const metadata = stdout
                     .substring(markerIndex + marker.length)
                     .trim();
@@ -126,6 +142,7 @@ function fetchAPPSCWebsite(page) {
 
                 console.log("HTTPS connection successful.");
                 console.log("HTTP status:", status);
+
                 console.log(
                     "HTML bytes:",
                     Buffer.byteLength(html, "utf8")
@@ -137,6 +154,10 @@ function fetchAPPSCWebsite(page) {
     });
 }
 
+// ========================================
+// RETRY CONNECTION
+// ========================================
+
 async function fetchWithRetry(page) {
     let lastError;
 
@@ -147,6 +168,7 @@ async function fetchWithRetry(page) {
             );
 
             return await fetchAPPSCWebsite(page);
+
         } catch (error) {
             lastError = error;
 
@@ -168,7 +190,10 @@ async function fetchWithRetry(page) {
     );
 }
 
-// Read existing pending records
+// ========================================
+// LOAD EXISTING PENDING JOBS
+// ========================================
+
 function loadPendingJobs() {
     if (!fs.existsSync(PENDING_FILE)) {
         return [];
@@ -176,7 +201,9 @@ function loadPendingJobs() {
 
     const data = fs.readFileSync(PENDING_FILE, "utf8");
 
-    if (!data.trim()) return [];
+    if (!data.trim()) {
+        return [];
+    }
 
     const jobs = JSON.parse(data);
 
@@ -189,24 +216,36 @@ function loadPendingJobs() {
     return jobs;
 }
 
-// Extract notification number, e.g. 37/2026
+// ========================================
+// EXTRACT NOTIFICATION NUMBER
+// Example: 37/2026
+// ========================================
+
 function getNotificationNumber(text) {
     const match = String(text || "").match(
         /notification\s*(?:no\.?|number)\s*[:.-]?\s*(\d{1,3})\s*\/\s*(20\d{2})/i
     );
 
-    if (!match) return null;
+    if (!match) {
+        return null;
+    }
 
     return `${Number(match[1])}/${match[2]}`;
 }
 
-// Extract date in DD/MM/YYYY format
+// ========================================
+// EXTRACT NOTIFICATION DATE
+// Format: DD/MM/YYYY or DD-MM-YYYY
+// ========================================
+
 function getNotificationDate(text) {
     const match = String(text || "").match(
         /\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/
     );
 
-    if (!match) return null;
+    if (!match) {
+        return null;
+    }
 
     const day = Number(match[1]);
     const month = Number(match[2]);
@@ -225,16 +264,24 @@ function getNotificationDate(text) {
     return date.toISOString().slice(0, 10);
 }
 
-// Convert date to comparable number
+// ========================================
+// DATE COMPARISON
+// ========================================
+
 function dateValue(date) {
-    if (!date) return 0;
+    if (!date) {
+        return 0;
+    }
 
     const value = Date.parse(`${date}T00:00:00Z`);
 
     return Number.isNaN(value) ? 0 : value;
 }
 
-// Build unique key for a notification
+// ========================================
+// BUILD UNIQUE JOB KEY
+// ========================================
+
 function getJobKey(job) {
     const number =
         job.notificationNumber ||
@@ -249,31 +296,125 @@ function getJobKey(job) {
     return `URL-${job.notificationUrl || job.id}`;
 }
 
-// Add PDF link to revision history without duplicates
-function addRevision(history, item, primaryURL) {
-    const existing = Array.isArray(history) ? history : [];
+// ========================================
+// NORMALIZE PDF URL
+// ========================================
 
-    if (!item || !item.url || item.url === primaryURL) {
-        return existing;
+function normalizePDFURL(url) {
+    if (!url) {
+        return "";
     }
 
-    const alreadyExists = existing.some(
-        revision => revision.url === item.url
-    );
+    try {
+        const parsed = new URL(String(url).trim());
 
-    if (alreadyExists) return existing;
+        parsed.hash = "";
 
-    existing.push({
-        url: item.url,
-        title: item.title || "APPSC Notification PDF",
-        notificationDate: item.notificationDate || null,
-        sourcePage: item.sourcePage || "APPSC"
-    });
+        return parsed.href;
 
-    return existing;
+    } catch {
+        return String(url).trim();
+    }
 }
 
-// Merge old and new versions of the same notification
+// ========================================
+// CLEAN REVISION HISTORY
+// ========================================
+
+function cleanRevisionHistory(history, primaryURL) {
+    const primary = normalizePDFURL(primaryURL);
+
+    const unique = new Map();
+
+    const items = Array.isArray(history)
+        ? history
+        : [];
+
+    for (const revision of items) {
+        if (!revision || !revision.url) {
+            continue;
+        }
+
+        const normalizedURL = normalizePDFURL(revision.url);
+
+        // Remove primary PDF from revision history
+        if (
+            !normalizedURL ||
+            normalizedURL === primary
+        ) {
+            continue;
+        }
+
+        // Remove duplicate URLs
+        if (!unique.has(normalizedURL)) {
+            unique.set(normalizedURL, {
+                url: revision.url,
+                title:
+                    revision.title ||
+                    "APPSC Notification PDF",
+                notificationDate:
+                    revision.notificationDate || null,
+                sourcePage:
+                    revision.sourcePage || "APPSC"
+            });
+        }
+    }
+
+    return [...unique.values()];
+}
+
+// ========================================
+// ADD REVISION WITHOUT DUPLICATES
+// ========================================
+
+function addRevision(history, item, primaryURL) {
+    const result = cleanRevisionHistory(
+        history,
+        primaryURL
+    );
+
+    if (!item || !item.url) {
+        return result;
+    }
+
+    const newURL = normalizePDFURL(item.url);
+
+    const primary = normalizePDFURL(primaryURL);
+
+    if (
+        !newURL ||
+        newURL === primary
+    ) {
+        return result;
+    }
+
+    const alreadyExists = result.some(
+        revision =>
+            normalizePDFURL(revision.url) === newURL
+    );
+
+    if (alreadyExists) {
+        return result;
+    }
+
+    result.push({
+        url: item.url,
+        title:
+            item.title ||
+            "APPSC Notification PDF",
+        notificationDate:
+            item.notificationDate || null,
+        sourcePage:
+            item.sourcePage || "APPSC"
+    });
+
+    return result;
+}
+
+// ========================================
+// MERGE OLD AND NEW NOTIFICATIONS
+// ========================================
+
 function mergeNotification(existing, incoming) {
     const oldHistory = Array.isArray(existing.revisionHistory)
         ? existing.revisionHistory
@@ -285,72 +426,110 @@ function mergeNotification(existing, incoming) {
             ? incoming.revisionHistory
             : [];
 
+    const oldPrimaryURL =
+        existing.notificationUrl ||
+        existing.officialLink ||
+        "";
+
     const incomingURL =
-        incoming.notificationUrl || incoming.officialLink || "";
+        incoming.notificationUrl ||
+        incoming.officialLink ||
+        "";
 
     let result = { ...existing };
 
+    let primaryURL = oldPrimaryURL;
+
     const oldDate = dateValue(existing.notificationDate);
+
     const newDate = dateValue(incoming.notificationDate);
 
+    // Promote incoming PDF only when its date is newer
     if (
         incomingURL &&
-        incomingURL !== existing.notificationUrl &&
+        normalizePDFURL(incomingURL) !==
+            normalizePDFURL(oldPrimaryURL) &&
         newDate > oldDate
     ) {
-        const previousPrimary = {
-            url: existing.notificationUrl,
-            title: existing.title,
-            notificationDate: existing.notificationDate || null,
-            sourcePage: existing.sourcePage || "APPSC"
-        };
+        // Preserve old primary PDF as a revision
+        result.revisionHistory = addRevision(
+            oldHistory,
+            {
+                url: oldPrimaryURL,
+                title: existing.title,
+                notificationDate:
+                    existing.notificationDate || null,
+                sourcePage:
+                    existing.sourcePage || "APPSC"
+            },
+            incomingURL
+        );
 
+        // Update primary notification details
         result = {
             ...result,
             title: incoming.title || existing.title,
             notificationUrl: incomingURL,
             notificationDate: incoming.notificationDate,
-            sourcePage: incoming.sourcePage || existing.sourcePage,
+            sourcePage:
+                incoming.sourcePage || existing.sourcePage,
             year: incoming.year || existing.year
         };
 
-        result.revisionHistory = addRevision(
-            oldHistory,
-            previousPrimary,
-            result.notificationUrl
-        );
-    } else {
-        result.revisionHistory = oldHistory;
+        primaryURL = incomingURL;
 
-        // Preserve incoming PDF if it is not the primary PDF
-        if (incomingURL && incomingURL !== existing.notificationUrl) {
+    } else {
+        // Clean existing history
+        result.revisionHistory = cleanRevisionHistory(
+            oldHistory,
+            primaryURL
+        );
+
+        // Preserve incoming PDF only if it is different
+        if (
+            incomingURL &&
+            normalizePDFURL(incomingURL) !==
+                normalizePDFURL(primaryURL)
+        ) {
             result.revisionHistory = addRevision(
                 result.revisionHistory,
                 {
                     url: incomingURL,
                     title: incoming.title,
-                    notificationDate: incoming.notificationDate,
+                    notificationDate:
+                        incoming.notificationDate,
                     sourcePage: incoming.sourcePage
                 },
-                result.notificationUrl
+                primaryURL
             );
         }
     }
 
+    // Add alternate PDFs without duplicates
     for (const revision of newHistory) {
         result.revisionHistory = addRevision(
             result.revisionHistory,
             revision,
-            result.notificationUrl
+            primaryURL
         );
     }
+
+    // Final cleanup
+    result.revisionHistory = cleanRevisionHistory(
+        result.revisionHistory,
+        primaryURL
+    );
 
     return result;
 }
 
-// Extract official PDF links from APPSC HTML
+// ========================================
+// EXTRACT OFFICIAL PDF LINKS
+// ========================================
+
 function extractNotifications(html, page) {
     const $ = cheerio.load(html);
+
     const results = new Map();
 
     $("a[href]").each((index, element) => {
@@ -368,16 +547,27 @@ function extractNotifications(html, page) {
             .trim();
 
         const contextText = `${title} ${rowText}`;
+
         const href = anchor.attr("href");
 
-        if (!href) return;
+        if (!href) {
+            return;
+        }
 
         try {
             const parsedURL = new URL(href, page.url);
 
-            if (parsedURL.protocol !== "https:") return;
-            if (!ALLOWED_HOSTS.includes(parsedURL.hostname)) return;
-            if (!/\.pdf(?:$|[?#])/i.test(parsedURL.href)) return;
+            if (parsedURL.protocol !== "https:") {
+                return;
+            }
+
+            if (!ALLOWED_HOSTS.includes(parsedURL.hostname)) {
+                return;
+            }
+
+            if (!/\.pdf(?:$|[?#])/i.test(parsedURL.href)) {
+                return;
+            }
 
             const notificationNumber = getNotificationNumber(
                 `${contextText} ${parsedURL.href}`
@@ -386,24 +576,37 @@ function extractNotifications(html, page) {
             let year;
 
             if (notificationNumber) {
-                year = Number(notificationNumber.split("/")[1]);
+                year = Number(
+                    notificationNumber.split("/")[1]
+                );
+
             } else {
                 const yearMatch =
                     contextText.match(/\b(20\d{2})\b/) ||
                     parsedURL.href.match(/\b(20\d{2})\b/);
 
-                if (!yearMatch) return;
+                if (!yearMatch) {
+                    return;
+                }
 
                 year = Number(yearMatch[1]);
             }
 
-            if (!YEARS.includes(year)) return;
+            if (!YEARS.includes(year)) {
+                return;
+            }
 
             const officialLink = parsedURL.href;
-            const notificationDate = getNotificationDate(contextText);
+
+            const notificationDate =
+                getNotificationDate(contextText);
 
             const item = {
-                title: title || rowText || "APPSC Official Notification PDF",
+                title:
+                    title ||
+                    rowText ||
+                    "APPSC Official Notification PDF",
+
                 year,
                 notificationNumber,
                 notificationDate,
@@ -417,6 +620,7 @@ function extractNotifications(html, page) {
 
             if (!results.has(key)) {
                 results.set(key, item);
+
             } else {
                 const previous = results.get(key);
 
@@ -429,12 +633,14 @@ function extractNotifications(html, page) {
                         {
                             url: previous.officialLink,
                             title: previous.title,
-                            notificationDate: previous.notificationDate,
+                            notificationDate:
+                                previous.notificationDate,
                             sourcePage: previous.sourcePage
                         }
                     ];
 
                     results.set(key, item);
+
                 } else {
                     previous.alternateLinks =
                         previous.alternateLinks || [];
@@ -442,68 +648,113 @@ function extractNotifications(html, page) {
                     previous.alternateLinks.push({
                         url: item.officialLink,
                         title: item.title,
-                        notificationDate: item.notificationDate,
+                        notificationDate:
+                            item.notificationDate,
                         sourcePage: item.sourcePage
                     });
                 }
             }
+
         } catch {
-            console.log("Skipping invalid URL:", href);
+            console.log(
+                "Skipping invalid URL:",
+                href
+            );
         }
     });
 
     return [...results.values()];
 }
 
-// Consolidate existing duplicate records safely
+// ========================================
+// CONSOLIDATE EXISTING PENDING RECORDS
+// ========================================
+
 function consolidateExistingJobs(jobs) {
     const grouped = new Map();
+
     const unkeyed = [];
 
     for (const job of jobs) {
-        const key = getJobKey(job);
+        // Clean even single records
+        const cleanedJob = {
+            ...job,
 
-        if (key.startsWith("URL-") && !job.notificationUrl) {
-            unkeyed.push(job);
+            revisionHistory: cleanRevisionHistory(
+                job.revisionHistory,
+                job.notificationUrl || job.officialLink || ""
+            )
+        };
+
+        const key = getJobKey(cleanedJob);
+
+        if (
+            key.startsWith("URL-") &&
+            !cleanedJob.notificationUrl
+        ) {
+            unkeyed.push(cleanedJob);
             continue;
         }
 
         if (!grouped.has(key)) {
-            grouped.set(key, job);
+            grouped.set(key, cleanedJob);
             continue;
         }
 
         const existing = grouped.get(key);
 
         const incoming = {
-            title: job.title,
-            notificationUrl: job.notificationUrl,
-            notificationDate: job.notificationDate ||
-                getNotificationDate(job.title || ""),
-            sourcePage: job.sourcePage,
-            year: job.year,
-            revisionHistory: job.revisionHistory || []
+            title: cleanedJob.title,
+
+            notificationUrl: cleanedJob.notificationUrl,
+
+            notificationDate:
+                cleanedJob.notificationDate ||
+                getNotificationDate(cleanedJob.title || ""),
+
+            sourcePage: cleanedJob.sourcePage,
+
+            year: cleanedJob.year,
+
+            revisionHistory:
+                cleanedJob.revisionHistory || []
         };
 
-        const merged = mergeNotification(existing, incoming);
+        const merged = mergeNotification(
+            existing,
+            incoming
+        );
 
         grouped.set(key, {
-            ...job,
+            ...cleanedJob,
             ...merged,
-            id: existing.id || job.id,
+
+            id: existing.id || cleanedJob.id,
+
             verificationStatus:
-                existing.verificationStatus || job.verificationStatus,
+                existing.verificationStatus ||
+                cleanedJob.verificationStatus,
+
             interview:
-                existing.interview || job.interview,
+                existing.interview ||
+                cleanedJob.interview,
+
             verified:
-                existing.verified === true || job.verified === true
+                existing.verified === true ||
+                cleanedJob.verified === true
         });
     }
 
-    return [...grouped.values(), ...unkeyed];
+    return [
+        ...grouped.values(),
+        ...unkeyed
+    ];
 }
 
-// Main scanner
+// ========================================
+// MAIN APPSC SCANNER
+// ========================================
+
 async function filterAPPSC() {
     console.log("\n====================================");
     console.log("         DURGA JOB ALERTS");
@@ -511,13 +762,20 @@ async function filterAPPSC() {
     console.log("====================================\n");
 
     console.log("India current year:", CURRENT_YEAR);
-    console.log("Monitoring years:", YEARS.join(", "));
+
+    console.log(
+        "Monitoring years:",
+        YEARS.join(", ")
+    );
 
     let pendingJobs;
 
     try {
         pendingJobs = loadPendingJobs();
+
+        // Clean existing records before scanning
         pendingJobs = consolidateExistingJobs(pendingJobs);
+
     } catch (error) {
         console.error(
             "Unable to read pending-jobs.json:",
@@ -531,7 +789,10 @@ async function filterAPPSC() {
     const existingByKey = new Map();
 
     for (const job of pendingJobs) {
-        existingByKey.set(getJobKey(job), job);
+        existingByKey.set(
+            getJobKey(job),
+            job
+        );
     }
 
     const allResults = new Map();
@@ -541,16 +802,24 @@ async function filterAPPSC() {
     let added = 0;
     let updated = 0;
 
-    // Scan official APPSC pages
+    // ====================================
+    // SCAN OFFICIAL APPSC PAGES
+    // ====================================
+
     for (const page of PAGES) {
         console.log("\n------------------------------------");
+
         console.log("Scanning:", page.name);
+
         console.log("URL:", page.url);
+
         console.log("------------------------------------");
 
         try {
             const html = await fetchWithRetry(page);
-            const notifications = extractNotifications(html, page);
+
+            const notifications =
+                extractNotifications(html, page);
 
             successfulPages++;
 
@@ -566,6 +835,7 @@ async function filterAPPSC() {
 
                 if (!allResults.has(key)) {
                     allResults.set(key, notification);
+
                 } else {
                     const previous = allResults.get(key);
 
@@ -574,30 +844,45 @@ async function filterAPPSC() {
                             id: "TEMP",
                             title: previous.title,
                             notificationUrl: previous.officialLink,
-                            notificationDate: previous.notificationDate,
+                            notificationDate:
+                                previous.notificationDate,
                             sourcePage: previous.sourcePage,
-                            revisionHistory: previous.alternateLinks || []
+                            revisionHistory:
+                                previous.alternateLinks || []
                         },
                         {
                             title: notification.title,
-                            notificationUrl: notification.officialLink,
-                            notificationDate: notification.notificationDate,
+                            notificationUrl:
+                                notification.officialLink,
+                            notificationDate:
+                                notification.notificationDate,
                             sourcePage: notification.sourcePage,
                             year: notification.year,
-                            alternateLinks: notification.alternateLinks || []
+                            alternateLinks:
+                                notification.alternateLinks || []
                         }
                     );
 
                     allResults.set(key, {
                         ...previous,
+
                         title: merged.title,
-                        officialLink: merged.notificationUrl,
-                        notificationDate: merged.notificationDate,
-                        sourcePage: merged.sourcePage,
-                        alternateLinks: merged.revisionHistory
+
+                        officialLink:
+                            merged.notificationUrl,
+
+                        notificationDate:
+                            merged.notificationDate,
+
+                        sourcePage:
+                            merged.sourcePage,
+
+                        alternateLinks:
+                            merged.revisionHistory
                     });
                 }
             }
+
         } catch (error) {
             failedPages++;
 
@@ -608,56 +893,98 @@ async function filterAPPSC() {
         }
     }
 
+    // ====================================
+    // STOP IF ALL PAGES FAILED
+    // ====================================
+
     if (successfulPages === 0) {
         console.error("\nAll APPSC pages failed.");
-        console.error("Existing pending file was not changed.");
+
+        console.error(
+            "Existing pending file was not changed."
+        );
 
         process.exitCode = 1;
         return;
     }
 
-    // Merge newly discovered notifications
+    // ====================================
+    // MERGE NEW NOTIFICATIONS
+    // ====================================
+
     for (const [key, job] of allResults.entries()) {
         const existing = existingByKey.get(key);
 
         if (existing) {
-            const merged = mergeNotification(existing, job);
+            const merged = mergeNotification(
+                existing,
+                job
+            );
 
-            if (
-                merged.notificationUrl !== existing.notificationUrl ||
-                JSON.stringify(merged.revisionHistory || []) !==
-                JSON.stringify(existing.revisionHistory || [])
-            ) {
+            const changed =
+                merged.notificationUrl !==
+                    existing.notificationUrl ||
+
+                JSON.stringify(
+                    merged.revisionHistory || []
+                ) !== JSON.stringify(
+                    existing.revisionHistory || []
+                );
+
+            if (changed) {
                 existingByKey.set(key, merged);
+
                 updated++;
             }
 
             continue;
         }
 
+        // New records remain pending
         const newJob = {
             id: `APPSC-${Date.now()}-${added + 1}`,
+
             title: job.title,
-            notificationNumber: job.notificationNumber || null,
-            notificationDate: job.notificationDate || null,
+
+            notificationNumber:
+                job.notificationNumber || null,
+
+            notificationDate:
+                job.notificationDate || null,
+
             department:
                 "Andhra Pradesh Public Service Commission",
+
             category: "AP Government",
+
             jobType: "Andhra Pradesh Government",
+
             qualification: "Not verified",
+
             location: "Andhra Pradesh",
+
             year: job.year,
+
             source: "APPSC Official Website",
+
             sourcePage: job.sourcePage,
+
             notificationUrl: job.officialLink,
+
             applyUrl: "",
+
             discoveredAt: new Date().toISOString(),
+
             verificationStatus: "Pending Verification",
+
             interview: "Not Verified",
+
             verified: false,
+
             revisionHistory: []
         };
 
+        // Add alternate PDFs safely
         for (const revision of job.alternateLinks || []) {
             newJob.revisionHistory = addRevision(
                 newJob.revisionHistory,
@@ -667,29 +994,49 @@ async function filterAPPSC() {
         }
 
         existingByKey.set(key, newJob);
+
         added++;
 
         console.log("\nNew notification:");
+
         console.log("Title:", job.title);
+
         console.log("PDF:", job.officialLink);
     }
 
-    pendingJobs = [...existingByKey.values()];
+    // ====================================
+    // FINAL CLEANUP BEFORE SAVING
+    // ====================================
 
-    // Save pending records
+    pendingJobs = consolidateExistingJobs(
+        [...existingByKey.values()]
+    );
+
+    // ====================================
+    // SAVE PENDING RECORDS
+    // ====================================
+
     try {
         fs.writeFileSync(
             PENDING_FILE,
             JSON.stringify(pendingJobs, null, 2) + "\n",
             "utf8"
         );
+
     } catch (error) {
-        console.error("Unable to save pending file:", error.message);
+        console.error(
+            "Unable to save pending file:",
+            error.message
+        );
+
         process.exitCode = 1;
         return;
     }
 
-    // Year-wise summary
+    // ====================================
+    // YEAR-WISE SUMMARY
+    // ====================================
+
     console.log("\n========== YEAR-WISE RESULTS ==========");
 
     for (const year of YEARS) {
@@ -698,30 +1045,71 @@ async function filterAPPSC() {
         );
 
         console.log(`\nYEAR: ${year}`);
-        console.log("Unique notifications:", yearJobs.length);
+
+        console.log(
+            "Unique notifications:",
+            yearJobs.length
+        );
 
         for (const job of yearJobs) {
             console.log(
                 `${job.notificationNumber || "Unknown"} - ${job.title}`
             );
+
             console.log("PDF:", job.officialLink);
         }
     }
 
+    // ====================================
+    // FINAL SUMMARY
+    // ====================================
+
     console.log("\n========== FINAL SUMMARY ==========");
+
     console.log("Pages successful:", successfulPages);
+
     console.log("Pages failed:", failedPages);
-    console.log("Monitoring years:", YEARS.join(", "));
-    console.log("Unique notifications discovered:", allResults.size);
-    console.log("New notifications added:", added);
-    console.log("Existing notifications updated:", updated);
-    console.log("Total unique pending records:", pendingJobs.length);
+
+    console.log(
+        "Monitoring years:",
+        YEARS.join(", ")
+    );
+
+    console.log(
+        "Unique notifications discovered:",
+        allResults.size
+    );
+
+    console.log(
+        "New notifications added:",
+        added
+    );
+
+    console.log(
+        "Existing notifications updated:",
+        updated
+    );
+
+    console.log(
+        "Total unique pending records:",
+        pendingJobs.length
+    );
+
     console.log("Saved file: pending-jobs.json");
 
     console.log("\nIMPORTANT:");
-    console.log("All discovered records remain pending verification.");
-    console.log("Interview status is not automatically verified.");
-    console.log("Do not publish without checking official PDFs.");
+
+    console.log(
+        "All discovered records remain pending verification."
+    );
+
+    console.log(
+        "Interview status is not automatically verified."
+    );
+
+    console.log(
+        "Do not publish without checking official PDFs."
+    );
 
     console.log("\nAPPSC scanning completed.");
 
@@ -734,12 +1122,24 @@ async function filterAPPSC() {
     }
 }
 
+// ========================================
+// START SCANNER
+// ========================================
+
 if (require.main === module) {
     filterAPPSC().catch(error => {
-        console.error("\nAPPSC SCANNER FAILED:", error);
+        console.error(
+            "\nAPPSC SCANNER FAILED:",
+            error
+        );
+
         process.exitCode = 1;
     });
 }
+
+// ========================================
+// EXPORT
+// ========================================
 
 module.exports = {
     filterAPPSC
