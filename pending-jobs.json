@@ -768,5 +768,26 @@
     "interview": "Not Verified",
     "verified": false,
     "revisionHistory": []
+  },
+  {
+    "id": "APPSC-1795160038284-1",
+    "title": "Notification No.38/2026 , Dated:19/11/2026 - Notification to the Post of Assistant Director In A.P. State Forensic Science Service (Forensic Engineering / Physics / Chemistry / Biology)",
+    "notificationNumber": "38/2026",
+    "notificationDate": "2026-11-19",
+    "department": "Andhra Pradesh Public Service Commission",
+    "category": "AP Government",
+    "jobType": "Andhra Pradesh Government",
+    "qualification": "Not verified",
+    "location": "Andhra Pradesh",
+    "year": 2026,
+    "source": "APPSC Official Website",
+    "sourcePage": "APPSC Recruitment Notifications",
+    "notificationUrl": "https://psc.ap.gov.in/Documents/NotificationDocuments/Forensic_DetailedNotification_20112026.pdf",
+    "applyUrl": "",
+    "discoveredAt": "2026-11-20T07:33:58.284Z",
+    "verificationStatus": "Pending Verification",
+    "interview": "Not Verified",
+    "verified": false,
+    "revisionHistory": []
   }
 ]
